@@ -50,7 +50,6 @@ import { GroupQueue } from './group-queue.js';
 import { resolveGroupFolderPath } from './group-folder.js';
 import { startIpcWatcher } from './ipc.js';
 import { findChannel, formatMessages, formatOutbound } from './router.js';
-
 import {
   restoreRemoteControl,
   startRemoteControl,
@@ -62,16 +61,13 @@ import {
   loadSenderAllowlist,
   shouldDropMessage,
 } from './sender-allowlist.js';
+import { startSessionCleanup } from './session-cleanup.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
 
 // Re-export for backwards compatibility during refactor
 export { escapeXml, formatMessages } from './router.js';
-
-// Track which chatJids have had messages sent via IPC send_message tool
-// so we can suppress duplicate agent output for those chats
-const ipcSentMessages = new Set<string>();
 
 let lastTimestamp = '';
 let sessions: Record<string, string> = {};
@@ -297,7 +293,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       // Strip <internal>...</internal> blocks — agent uses these for internal reasoning
       const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
       logger.info({ group: group.name }, `Agent output: ${raw.length} chars`);
-      if (text && !ipcSentMessages.has(chatJid)) {
+      if (text) {
         await channel.sendMessage(chatJid, text);
         outputSentToUser = true;
       }
@@ -314,7 +310,6 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     }
   });
 
-  ipcSentMessages.delete(chatJid);
   await channel.setTyping?.(chatJid, false);
   if (idleTimer) clearTimeout(idleTimer);
 
@@ -714,17 +709,13 @@ async function main(): Promise<void> {
         return;
       }
       const text = formatOutbound(rawText);
-      if (text) {
-        ipcSentMessages.add(jid);
-        await channel.sendMessage(jid, text);
-      }
+      if (text) await channel.sendMessage(jid, text);
     },
   });
   startIpcWatcher({
     sendMessage: (jid, text) => {
       const channel = findChannel(channels, jid);
       if (!channel) throw new Error(`No channel for JID: ${jid}`);
-      ipcSentMessages.add(jid);
       return channel.sendMessage(jid, text);
     },
     registeredGroups: () => registeredGroups,
@@ -756,6 +747,7 @@ async function main(): Promise<void> {
       }
     },
   });
+  startSessionCleanup();
   queue.setProcessMessagesFn(processGroupMessages);
   recoverPendingMessages();
   startMessageLoop().catch((err) => {
