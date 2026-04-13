@@ -344,6 +344,22 @@ export class TelegramChannel implements Channel {
     });
   }
 
+  /**
+   * Send a single Telegram message chunk.
+   * Tries Markdown parse_mode first for rich formatting (bold, italic, code blocks, links).
+   * Falls back to plain text if Markdown parsing fails (e.g. unmatched special characters).
+   */
+  private async sendChunk(numericId: string, chunk: string): Promise<void> {
+    try {
+      await this.bot!.api.sendMessage(numericId, chunk, {
+        parse_mode: 'Markdown',
+      });
+    } catch {
+      // Markdown parsing failed — send as plain text
+      await this.bot!.api.sendMessage(numericId, chunk);
+    }
+  }
+
   async sendMessage(jid: string, text: string): Promise<void> {
     if (!this.bot) {
       logger.warn('Telegram bot not initialized');
@@ -356,13 +372,10 @@ export class TelegramChannel implements Channel {
       // Telegram has a 4096 character limit per message — split if needed
       const MAX_LENGTH = 4096;
       if (text.length <= MAX_LENGTH) {
-        await this.bot.api.sendMessage(numericId, text);
+        await this.sendChunk(numericId, text);
       } else {
         for (let i = 0; i < text.length; i += MAX_LENGTH) {
-          await this.bot.api.sendMessage(
-            numericId,
-            text.slice(i, i + MAX_LENGTH),
-          );
+          await this.sendChunk(numericId, text.slice(i, i + MAX_LENGTH));
         }
       }
       logger.info({ jid, length: text.length }, 'Telegram message sent');
