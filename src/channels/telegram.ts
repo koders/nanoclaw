@@ -40,7 +40,9 @@ function downloadFile(url: string, destPath: string): Promise<void> {
           if (redirectUrl) {
             file.close();
             fs.unlinkSync(destPath);
-            return downloadFile(redirectUrl, destPath).then(resolve).catch(reject);
+            return downloadFile(redirectUrl, destPath)
+              .then(resolve)
+              .catch(reject);
           }
         }
         response.pipe(file);
@@ -89,7 +91,10 @@ export class TelegramChannel implements Channel {
 
       // Determine file extension
       const ext = path.extname(file.file_path) || '.jpg';
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const timestamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, '-')
+        .slice(0, 19);
       const filename = `photo_${timestamp}_${messageId}${ext}`;
 
       // Save to group workspace under images/
@@ -105,10 +110,7 @@ export class TelegramChannel implements Channel {
       // Return container-mapped path so the agent can read it
       return `/workspace/group/images/${filename}`;
     } catch (err) {
-      logger.error(
-        { err, fileId },
-        'Failed to download Telegram photo',
-      );
+      logger.error({ err, fileId }, 'Failed to download Telegram photo');
       return null;
     }
   }
@@ -306,9 +308,7 @@ export class TelegramChannel implements Channel {
     });
 
     this.bot.on('message:video', (ctx) => storeNonText(ctx, '[Video]'));
-    this.bot.on('message:voice', (ctx) =>
-      storeNonText(ctx, '[Voice message]'),
-    );
+    this.bot.on('message:voice', (ctx) => storeNonText(ctx, '[Voice message]'));
     this.bot.on('message:audio', (ctx) => storeNonText(ctx, '[Audio]'));
     this.bot.on('message:document', (ctx) => {
       const name = ctx.message.document?.file_name || 'file';
@@ -318,12 +318,8 @@ export class TelegramChannel implements Channel {
       const emoji = ctx.message.sticker?.emoji || '';
       storeNonText(ctx, `[Sticker ${emoji}]`);
     });
-    this.bot.on('message:location', (ctx) =>
-      storeNonText(ctx, '[Location]'),
-    );
-    this.bot.on('message:contact', (ctx) =>
-      storeNonText(ctx, '[Contact]'),
-    );
+    this.bot.on('message:location', (ctx) => storeNonText(ctx, '[Location]'));
+    this.bot.on('message:contact', (ctx) => storeNonText(ctx, '[Contact]'));
 
     // Handle errors gracefully
     this.bot.catch((err) => {
