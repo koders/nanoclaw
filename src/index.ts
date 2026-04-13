@@ -714,7 +714,10 @@ async function main(): Promise<void> {
         return;
       }
       const text = formatOutbound(rawText);
-      if (text) await channel.sendMessage(jid, text);
+      if (text) {
+        ipcSentMessages.add(jid);
+        await channel.sendMessage(jid, text);
+      }
     },
   });
   startIpcWatcher({
