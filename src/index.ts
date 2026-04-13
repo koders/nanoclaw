@@ -293,7 +293,13 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
       logger.info({ group: group.name }, `Agent output: ${raw.length} chars`);
       if (text) {
-        await channel.sendMessage(chatJid, text);
+        if (ipcSentJids.has(chatJid)) {
+          // Agent already sent message(s) via send_message tool — suppress result echo
+          logger.info({ group: group.name }, 'Suppressed result output — IPC send_message already delivered');
+          ipcSentJids.delete(chatJid);
+        } else {
+          await channel.sendMessage(chatJid, text);
+        }
         outputSentToUser = true;
       }
       // Only reset idle timer on actual results, not session-update markers (result: null)
@@ -711,10 +717,14 @@ async function main(): Promise<void> {
       if (text) await channel.sendMessage(jid, text);
     },
   });
+  // Track JIDs that received IPC send_message, to suppress duplicate result output
+  const ipcSentJids = new Set<string>();
+
   startIpcWatcher({
     sendMessage: (jid, text) => {
       const channel = findChannel(channels, jid);
       if (!channel) throw new Error(`No channel for JID: ${jid}`);
+      ipcSentJids.add(jid);
       return channel.sendMessage(jid, text);
     },
     registeredGroups: () => registeredGroups,
