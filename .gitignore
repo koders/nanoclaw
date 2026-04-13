@@ -41,3 +41,5 @@ store.backup/
 *.backup
 groups/*/images/
 groups/*/patches/
+nanoclaw.log
+src/channels/telegram.test.ts
