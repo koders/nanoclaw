@@ -349,9 +349,20 @@ export class TelegramChannel implements Channel {
    * Tries Markdown parse_mode first for rich formatting (bold, italic, code blocks, links).
    * Falls back to plain text if Markdown parsing fails (e.g. unmatched special characters).
    */
+  /**
+   * Convert standard markdown to Telegram-compatible markdown.
+   * Telegram Markdown v1 uses *bold* (single) not **bold** (double).
+   */
+  private toTelegramMarkdown(text: string): string {
+    // Convert **bold** to *bold*
+    let result = text.replace(/\*\*(.+?)\*\*/g, '*$1*');
+    return result;
+  }
+
   private async sendChunk(numericId: string, chunk: string): Promise<void> {
+    const formatted = this.toTelegramMarkdown(chunk);
     try {
-      await this.bot!.api.sendMessage(numericId, chunk, {
+      await this.bot!.api.sendMessage(numericId, formatted, {
         parse_mode: 'Markdown',
       });
     } catch {
