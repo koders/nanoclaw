@@ -20,8 +20,8 @@ pkill -f "node dist/index.js" 2>/dev/null || true
 sleep 2
 
 # Start new process in background with logging
-nohup node dist/index.js >> /var/log/nanoclaw.log 2>&1 &
+nohup node dist/index.js >> /home/nanoclaw/nanoclaw/nanoclaw.log 2>&1 &
 
 NEW_PID=$!
 echo "✅ NanoClaw restarted (PID: $NEW_PID)"
-echo "📋 Logs: tail -f /var/log/nanoclaw.log"
+echo "📋 Logs: tail -f /home/nanoclaw/nanoclaw/nanoclaw.log"
