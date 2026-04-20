@@ -350,6 +350,25 @@ export function getNewMessages(
   return { messages: rows, newTimestamp };
 }
 
+/**
+ * List the most recent messages for a given chat JID, ordered newest-first.
+ * Used by the web channel's /history endpoint.
+ */
+export function listMessagesByChatJid(
+  chatJid: string,
+  limit: number,
+): NewMessage[] {
+  return db
+    .prepare(
+      `SELECT id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message
+       FROM messages
+       WHERE chat_jid = ?
+       ORDER BY timestamp DESC
+       LIMIT ?`,
+    )
+    .all(chatJid, limit) as NewMessage[];
+}
+
 export function getMessagesSince(
   chatJid: string,
   sinceTimestamp: string,
