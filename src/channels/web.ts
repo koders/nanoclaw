@@ -8,7 +8,9 @@ import express, {
   type NextFunction,
 } from 'express';
 
+import * as db from '../db.js';
 import type { Channel, NewMessage } from '../types.js';
+
 import { registerChannel, type ChannelOpts } from './registry.js';
 
 const JID_RE = /^web:[a-z0-9_-]{1,64}$/;
@@ -102,9 +104,17 @@ export function createWebChannel(opts: ChannelOpts): Channel | null {
       });
     });
 
-    app.get('/history', (_req, res) => {
-      // Filled in Task 21
-      res.status(501).json({ error: 'not_implemented' });
+    app.get('/history', (req, res) => {
+      const jid = String(req.query.chatJid ?? '');
+      if (!JID_RE.test(jid)) {
+        return res.status(400).json({ error: 'invalid_chatJid' });
+      }
+      const limit = Math.min(
+        Math.max(Number(req.query.limit ?? 100), 1),
+        500,
+      );
+      const messages = db.listMessagesByChatJid(jid, limit);
+      res.json({ messages });
     });
 
     return app;

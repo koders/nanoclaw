@@ -4,6 +4,8 @@ import type { AddressInfo } from 'node:net';
 import request from 'supertest';
 import { describe, it, expect, vi } from 'vitest';
 
+import * as db from '../db.js';
+
 import { createWebChannel } from './web.js';
 
 const opts = {
@@ -141,13 +143,10 @@ describe('web channel — SSE', () => {
 
     const events: string[] = [];
     const ac = new AbortController();
-    const resP = fetch(
-      `http://127.0.0.1:${port}/stream?chatJid=web:default`,
-      {
-        headers: { authorization: `Bearer ${'t'.repeat(32)}` },
-        signal: ac.signal,
-      },
-    );
+    const resP = fetch(`http://127.0.0.1:${port}/stream?chatJid=web:default`, {
+      headers: { authorization: `Bearer ${'t'.repeat(32)}` },
+      signal: ac.signal,
+    });
     const res = await resP;
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
@@ -175,5 +174,39 @@ describe('web channel — SSE', () => {
 
     ac.abort();
     await ch.disconnect();
+  });
+});
+
+describe('web channel — GET /history', () => {
+  it('returns messages for the requested jid', async () => {
+    process.env.WEB_CHANNEL_ENABLED = '1';
+    process.env.WEB_CHANNEL_PORT = '0';
+    process.env.WEB_CHANNEL_TOKEN = 't'.repeat(32);
+    const spy = vi.spyOn(db, 'listMessagesByChatJid').mockReturnValue([
+      {
+        id: '1',
+        chat_jid: 'web:default',
+        sender: 'web-user',
+        sender_name: 'R',
+        content: 'hi',
+        timestamp: '2026-04-20T10:00:00Z',
+      },
+    ]);
+    const ch = createWebChannel({
+      onMessage: vi.fn(),
+      onChatMetadata: vi.fn(),
+      registeredGroups: () => ({}),
+    })!;
+    await ch.connect();
+    const srv = (ch as unknown as { _server: Server })._server;
+    const port = (srv.address() as AddressInfo).port;
+    const res = await request(`http://127.0.0.1:${port}`)
+      .get('/history?chatJid=web:default&limit=50')
+      .set('authorization', `Bearer ${'t'.repeat(32)}`);
+    expect(res.status).toBe(200);
+    expect(res.body.messages).toHaveLength(1);
+    expect(spy).toHaveBeenCalledWith('web:default', 50);
+    await ch.disconnect();
+    spy.mockRestore();
   });
 });
