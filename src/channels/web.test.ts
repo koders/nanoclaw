@@ -210,3 +210,54 @@ describe('web channel — GET /history', () => {
     spy.mockRestore();
   });
 });
+
+describe('web channel — echo mode', () => {
+  it('with WEB_CHANNEL_ECHO=1 answers messages back as assistant', async () => {
+    process.env.WEB_CHANNEL_ENABLED = '1';
+    process.env.WEB_CHANNEL_PORT = '0';
+    process.env.WEB_CHANNEL_TOKEN = 't'.repeat(32);
+    process.env.WEB_CHANNEL_ECHO = '1';
+    const onMessage = vi.fn();
+    const ch = createWebChannel({
+      onMessage,
+      onChatMetadata: vi.fn(),
+      registeredGroups: () => ({}),
+    })!;
+    await ch.connect();
+    const srv = (ch as unknown as { _server: Server })._server;
+    const port = (srv.address() as AddressInfo).port;
+
+    const ac = new AbortController();
+    const streamRes = await fetch(
+      `http://127.0.0.1:${port}/stream?chatJid=web:default`,
+      {
+        headers: { authorization: `Bearer ${'t'.repeat(32)}` },
+        signal: ac.signal,
+      },
+    );
+    const reader = streamRes.body!.getReader();
+    const dec = new TextDecoder();
+    const chunks: string[] = [];
+    (async () => {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(dec.decode(value));
+      }
+    })().catch(() => {});
+
+    await request(`http://127.0.0.1:${port}`)
+      .post('/messages')
+      .set('authorization', `Bearer ${'t'.repeat(32)}`)
+      .send({ chatJid: 'web:default', text: 'ping' });
+
+    await new Promise((r) => setTimeout(r, 300));
+    const joined = chunks.join('');
+    expect(joined).toMatch(/"isTyping":true/);
+    expect(joined).toMatch(/"text":"ping"/);
+    expect(onMessage).not.toHaveBeenCalled(); // echo skips orchestrator
+    ac.abort();
+    await ch.disconnect();
+    delete process.env.WEB_CHANNEL_ECHO;
+  });
+});

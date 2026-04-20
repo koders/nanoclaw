@@ -78,7 +78,25 @@ export function createWebChannel(opts: ChannelOpts): Channel | null {
         content: body.text,
         timestamp: new Date().toISOString(),
       };
-      opts.onMessage(body.chatJid, msg);
+      if (process.env.WEB_CHANNEL_ECHO === '1') {
+        // Dev-only: bypass orchestrator, echo back via our own channel API.
+        const jid = body.chatJid;
+        const text = body.text;
+        setImmediate(() => {
+          broadcast(jid, { type: 'typing', isTyping: true });
+          setTimeout(() => {
+            broadcast(jid, {
+              type: 'message',
+              role: 'assistant',
+              text,
+              ts: new Date().toISOString(),
+            });
+            broadcast(jid, { type: 'typing', isTyping: false });
+          }, 150);
+        });
+      } else {
+        opts.onMessage(body.chatJid, msg);
+      }
       res.json({ ok: true, id: msg.id });
     });
 
@@ -109,10 +127,7 @@ export function createWebChannel(opts: ChannelOpts): Channel | null {
       if (!JID_RE.test(jid)) {
         return res.status(400).json({ error: 'invalid_chatJid' });
       }
-      const limit = Math.min(
-        Math.max(Number(req.query.limit ?? 100), 1),
-        500,
-      );
+      const limit = Math.min(Math.max(Number(req.query.limit ?? 100), 1), 500);
       const messages = db.listMessagesByChatJid(jid, limit);
       res.json({ messages });
     });
