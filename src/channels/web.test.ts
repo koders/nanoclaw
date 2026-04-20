@@ -70,3 +70,57 @@ describe('web channel — bearer auth', () => {
     await ch.disconnect();
   });
 });
+
+describe('web channel — POST /messages', () => {
+  async function make() {
+    process.env.WEB_CHANNEL_ENABLED = '1';
+    process.env.WEB_CHANNEL_PORT = '0';
+    process.env.WEB_CHANNEL_TOKEN = 't'.repeat(32);
+    const onMessage = vi.fn();
+    const ch = createWebChannel({
+      onMessage,
+      onChatMetadata: vi.fn(),
+      registeredGroups: () => ({}),
+    })!;
+    await ch.connect();
+    const srv = (ch as unknown as { _server: Server })._server;
+    const port = (srv.address() as AddressInfo).port;
+    return { ch, port, onMessage };
+  }
+
+  it('calls opts.onMessage on valid body', async () => {
+    const { ch, port, onMessage } = await make();
+    const res = await request(`http://127.0.0.1:${port}`)
+      .post('/messages')
+      .set('authorization', `Bearer ${'t'.repeat(32)}`)
+      .send({ chatJid: 'web:default', text: 'hello' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(onMessage).toHaveBeenCalledOnce();
+    const [jid, msg] = onMessage.mock.calls[0]!;
+    expect(jid).toBe('web:default');
+    expect(msg.content).toBe('hello');
+    expect(msg.chat_jid).toBe('web:default');
+    await ch.disconnect();
+  });
+
+  it('rejects invalid chatJid with 400', async () => {
+    const { ch, port } = await make();
+    const res = await request(`http://127.0.0.1:${port}`)
+      .post('/messages')
+      .set('authorization', `Bearer ${'t'.repeat(32)}`)
+      .send({ chatJid: 'tele:1', text: 'x' });
+    expect(res.status).toBe(400);
+    await ch.disconnect();
+  });
+
+  it('rejects empty text with 400', async () => {
+    const { ch, port } = await make();
+    const res = await request(`http://127.0.0.1:${port}`)
+      .post('/messages')
+      .set('authorization', `Bearer ${'t'.repeat(32)}`)
+      .send({ chatJid: 'web:default', text: '' });
+    expect(res.status).toBe(400);
+    await ch.disconnect();
+  });
+});
