@@ -124,3 +124,56 @@ describe('web channel — POST /messages', () => {
     await ch.disconnect();
   });
 });
+
+describe('web channel — SSE', () => {
+  it('delivers message and typing events to subscribed jid only', async () => {
+    process.env.WEB_CHANNEL_ENABLED = '1';
+    process.env.WEB_CHANNEL_PORT = '0';
+    process.env.WEB_CHANNEL_TOKEN = 't'.repeat(32);
+    const ch = createWebChannel({
+      onMessage: vi.fn(),
+      onChatMetadata: vi.fn(),
+      registeredGroups: () => ({}),
+    })!;
+    await ch.connect();
+    const srv = (ch as unknown as { _server: Server })._server;
+    const port = (srv.address() as AddressInfo).port;
+
+    const events: string[] = [];
+    const ac = new AbortController();
+    const resP = fetch(
+      `http://127.0.0.1:${port}/stream?chatJid=web:default`,
+      {
+        headers: { authorization: `Bearer ${'t'.repeat(32)}` },
+        signal: ac.signal,
+      },
+    );
+    const res = await resP;
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+
+    (async () => {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        events.push(decoder.decode(value));
+      }
+    })().catch(() => {});
+
+    await new Promise((r) => setTimeout(r, 50));
+    await ch.setTyping!('web:default', true);
+    await ch.sendMessage('web:default', 'hello world');
+    await ch.sendMessage('web:other', 'should not appear');
+    await new Promise((r) => setTimeout(r, 50));
+
+    const joined = events.join('');
+    expect(joined).toMatch(/event: typing/);
+    expect(joined).toMatch(/"isTyping":true/);
+    expect(joined).toMatch(/event: message/);
+    expect(joined).toMatch(/hello world/);
+    expect(joined).not.toMatch(/should not appear/);
+
+    ac.abort();
+    await ch.disconnect();
+  });
+});
