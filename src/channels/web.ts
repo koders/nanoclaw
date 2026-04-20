@@ -110,7 +110,10 @@ export function createWebChannel(opts: ChannelOpts): Channel | null {
     return app;
   }
 
-  function broadcast(jid: string, payload: { type: string } & Record<string, unknown>) {
+  function broadcast(
+    jid: string,
+    payload: { type: string } & Record<string, unknown>,
+  ) {
     const data = JSON.stringify(payload);
     for (const c of sseClients) {
       if (c.jid === jid) {
@@ -119,13 +122,14 @@ export function createWebChannel(opts: ChannelOpts): Channel | null {
     }
   }
 
-  return {
+  const channel: Channel & { _server?: Server } = {
     name: 'web',
     async connect() {
       const app = buildApp();
       await new Promise<void>((resolve) => {
         server = app.listen(port, '127.0.0.1', () => resolve());
       });
+      channel._server = server ?? undefined;
     },
     async sendMessage(jid: string, text: string) {
       broadcast(jid, {
@@ -157,8 +161,10 @@ export function createWebChannel(opts: ChannelOpts): Channel | null {
         server?.close(() => resolve());
       });
       server = null;
+      channel._server = undefined;
     },
   };
+  return channel;
 }
 
 registerChannel('web', createWebChannel);
