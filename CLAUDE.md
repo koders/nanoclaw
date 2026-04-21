@@ -124,10 +124,10 @@ launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
 launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
 launchctl kickstart -k gui/$(id -u)/com.nanoclaw  # restart
 
-# Linux (systemd)
-systemctl --user start nanoclaw
-systemctl --user stop nanoclaw
-systemctl --user restart nanoclaw
+# Linux (systemd, system-level on this box)
+sudo systemctl start nanoclaw
+sudo systemctl stop nanoclaw
+sudo systemctl restart nanoclaw
 ```
 
 ## Troubleshooting
